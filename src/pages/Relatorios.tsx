@@ -83,18 +83,9 @@ const Relatorios = () => {
               .gte("data_atendimento", start.toISOString())
               .lte("data_atendimento", end.toISOString());
 
-            // Buscar retiradas vinculadas ao barbeiro no período
-            const { data: retiradas } = await supabase
-              .from("retiradas")
-              .select("valor")
-              .eq("barbeiro_id", barbeiroData.id)
-              .gte("data_retirada", start.toISOString())
-              .lte("data_retirada", end.toISOString());
-
             const totalRevenue = atendimentos?.reduce((sum, a) => sum + Number(a.valor), 0) || 0;
             const uniqueClients = new Set(atendimentos?.map(a => a.cliente_nome)).size;
-            const totalRetiradas = retiradas?.reduce((sum, r) => sum + Number(r.valor), 0) || 0;
-            const commission = (totalRevenue * ((barbeiroData.porcentagem_comissao || 50) / 100)) - totalRetiradas;
+            const commission = (totalRevenue * ((barbeiroData.porcentagem_comissao || 50) / 100));
 
             setStats({
               revenue: totalRevenue,
@@ -106,7 +97,6 @@ const Relatorios = () => {
               revenue: totalRevenue,
               appointments: atendimentos?.length || 0,
               commission: commission,
-              retiradas: totalRetiradas,
             }]);
           }
         } else {
@@ -148,26 +138,9 @@ const Relatorios = () => {
             barberMap.set(a.barbeiro_id, existing);
           });
 
-          // Buscar retiradas de todos os barbeiros no período
-          const { data: retiradas } = await supabase
-            .from("retiradas")
-            .select("barbeiro_id, valor")
-            .not("barbeiro_id", "is", null)
-            .gte("data_retirada", start.toISOString())
-            .lte("data_retirada", end.toISOString());
-
-          // Adicionar retiradas ao mapa de barbeiros
-          retiradas?.forEach((r: any) => {
-            if (barberMap.has(r.barbeiro_id)) {
-              const existing = barberMap.get(r.barbeiro_id);
-              existing.retiradas += Number(r.valor);
-              barberMap.set(r.barbeiro_id, existing);
-            }
-          });
-
           const barberStats = Array.from(barberMap.values()).map(b => ({
             ...b,
-            commission: (b.revenue * (b.percentage / 100)) - b.retiradas,
+            commission: (b.revenue * (b.percentage / 100)),
           }));
 
           const totalCommissions = barberStats.reduce((sum, b) => sum + b.commission, 0);
@@ -202,13 +175,7 @@ const Relatorios = () => {
           loadStats();
         }
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "retiradas" },
-        () => {
-          loadStats();
-        }
-      )
+      // Retiradas não afetam mais relatórios
       .subscribe();
 
     return () => {
@@ -409,11 +376,7 @@ const Relatorios = () => {
                             <div className="text-right">
                               <p className="text-sm text-muted-foreground">Minha comissão</p>
                               <p className="text-2xl font-bold text-primary">{formatCurrency(barbers[0].commission)}</p>
-                              {barbers[0].retiradas > 0 && (
-                                <p className="text-xs text-destructive mt-1">
-                                  Retiradas: -{formatCurrency(barbers[0].retiradas)}
-                                </p>
-                              )}
+                              
                             </div>
                           </div>
                         </div>
@@ -452,11 +415,7 @@ const Relatorios = () => {
                                 <p className="text-sm text-muted-foreground">
                                   Comissão: {formatCurrency(barber.commission)}
                                 </p>
-                                {barber.retiradas > 0 && (
-                                  <p className="text-xs text-destructive">
-                                    Retiradas: -{formatCurrency(barber.retiradas)}
-                                  </p>
-                                )}
+                                
                               </div>
                             </div>
                           ))}
