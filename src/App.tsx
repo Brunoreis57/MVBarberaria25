@@ -23,36 +23,50 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
+const App = () => {
+  const ready = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+
+  if (!ready) {
+    return (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/agendamentos" element={<Agendamentos />} />
-            <Route path="/atendimentos" element={<Atendimentos />} />
-            <Route path="/agendar" element={<AgendamentoPublico />} />
-            <Route path="/caixa" element={<Caixa />} />
-            <Route path="/produtos" element={<Produtos />} />
-            <Route path="/planos" element={<Planos />} />
-            <Route path="/clientes" element={<Clientes />} />
-            <Route path="/install" element={<Install />} />
-            
-            <Route path="/relatorios" element={<Relatorios />} />
-            <Route path="/notificacoes" element={<Notificacoes />} />
-            <Route path="/configuracoes" element={<Configuracoes />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <Install />
       </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+    );
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/agendamentos" element={<Agendamentos />} />
+              <Route path="/atendimentos" element={<Atendimentos />} />
+              <Route path="/agendar" element={<AgendamentoPublico />} />
+              <Route path="/caixa" element={<Caixa />} />
+              <Route path="/produtos" element={<Produtos />} />
+              <Route path="/planos" element={<Planos />} />
+              <Route path="/clientes" element={<Clientes />} />
+              <Route path="/install" element={<Install />} />
+              
+              <Route path="/relatorios" element={<Relatorios />} />
+              <Route path="/notificacoes" element={<Notificacoes />} />
+              <Route path="/configuracoes" element={<Configuracoes />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
