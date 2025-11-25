@@ -1,0 +1,4 @@
+project_id = "ziqelvurazoaczrrilbi"
+
+[functions.fechar-mes-barbeiro]
+verify_jwt = false
