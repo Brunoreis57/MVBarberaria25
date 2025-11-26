@@ -343,7 +343,7 @@ const Caixa = () => {
                 return a.tipo === 'credito' ? sum + valor : sum - valor;
               }, 0);
               
-              const saldoBarbeiro = totalComissao - totalRetiradasBarbeiro + totalAjustes;
+              const saldoBarbeiro = totalComissao + saldoAnterior - totalRetiradasBarbeiro;
 
               // Saldo do mês anterior (para carry over)
               const totalComissaoAtendimentosAnterior = atendimentosBarbeiroAnterior.reduce((sum: number, a: any) => {
@@ -612,16 +612,7 @@ const Caixa = () => {
                         <span className="text-sm text-muted-foreground">Saldo Inicial (mês passado):</span>
                         <span className={`font-semibold ${stat.saldo_inicial_mes >= 0 ? 'text-primary' : 'text-red-600'}`}>{formatCurrency(stat.saldo_inicial_mes)}</span>
                       </div>
-                      {stat.total_ajustes !== 0 && (
-                        <>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Ajustes:</span>
-                            <span className={`font-semibold ${stat.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatCurrency(stat.total_ajustes)}
-                            </span>
-                          </div>
-                        </>
-                      )}
+                      
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-sm font-semibold">Saldo:</span>
                         <span className={`text-xl font-bold ${stat.saldo >= 0 ? 'text-primary' : 'text-red-600'}`}>
@@ -740,12 +731,7 @@ const Caixa = () => {
                           <span className="font-semibold">Saldo Inicial (mês passado):</span>
                           <span className={`text-xl font-bold ${statsBarbeiro.saldo_inicial_mes >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(statsBarbeiro.saldo_inicial_mes)}</span>
                         </div>
-                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                          <span className="font-semibold">Ajustes:</span>
-                          <span className={`text-xl font-bold ${statsBarbeiro.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}> 
-                            {formatCurrency(statsBarbeiro.total_ajustes)}
-                          </span>
-                        </div>
+                        
                       <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg border-2 border-primary">
                         <span className="font-bold text-lg">Saldo:</span>
                         <span className={`text-2xl font-bold ${statsBarbeiro.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
