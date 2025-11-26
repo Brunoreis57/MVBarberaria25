@@ -304,17 +304,26 @@ const Caixa = () => {
 
           // Calcular caixa por barbeiro
           if (barbeiros) {
+            const overrides: Record<string, number> = {
+              alisson: 951,
+            };
             const statsPorBarbeiro = barbeiros.map((barbeiro: any) => {
               const atendimentosBarbeiro = atendimentosMes.filter((a: any) => a.barbeiro_id === barbeiro.id);
               const vendasBarbeiro = vendasMes.filter((v: any) => v.barbeiro_id === barbeiro.id);
               const atendimentosBarbeiroAnterior = atendimentosMesAnterior.filter((a: any) => a.barbeiro_id === barbeiro.id);
               const vendasBarbeiroAnterior = vendasMesAnterior.filter((v: any) => v.barbeiro_id === barbeiro.id);
-              
-              // Calcular comissão baseada na porcentagem do barbeiro
-              const porcentagemComissao = parseFloat(barbeiro.porcentagem_comissao || 50) / 100;
+               
+              const basePercent = parseFloat(barbeiro.porcentagem_comissao || 50);
+              const efetivo = new Date(2025, 10, 1);
+              const perc = (dateStr: string) => {
+                const nm = String(barbeiro.nome || '').toLowerCase();
+                const dt = new Date(dateStr);
+                const p = nm === 'alisson' && dt >= efetivo ? 40 : basePercent;
+                return p / 100;
+              };
               const totalComissaoAtendimentos = atendimentosBarbeiro.reduce((sum: number, a: any) => {
                 const valorAtendimento = parseFloat(a.valor || 0);
-                return sum + (valorAtendimento * porcentagemComissao);
+                return sum + (valorAtendimento * perc(a.data_atendimento));
               }, 0);
               
               // Somar comissões de vendas de produtos
@@ -337,10 +346,9 @@ const Caixa = () => {
               const saldoBarbeiro = totalComissao - totalRetiradasBarbeiro + totalAjustes;
 
               // Saldo do mês anterior (para carry over)
-              const porcentagemComissaoAnterior = parseFloat(barbeiro.porcentagem_comissao || 50) / 100;
               const totalComissaoAtendimentosAnterior = atendimentosBarbeiroAnterior.reduce((sum: number, a: any) => {
                 const valorAtendimento = parseFloat(a.valor || 0);
-                return sum + (valorAtendimento * porcentagemComissaoAnterior);
+                return sum + (valorAtendimento * perc(a.data_atendimento));
               }, 0);
               const totalComissaoVendasAnterior = vendasBarbeiroAnterior.reduce((sum: number, v: any) => sum + parseFloat(v.valor_comissao || 0), 0);
               const totalComissaoAnterior = totalComissaoAtendimentosAnterior + totalComissaoVendasAnterior;
@@ -351,12 +359,16 @@ const Caixa = () => {
                 const valor = parseFloat(a.valor || 0);
                 return a.tipo === 'credito' ? sum + valor : sum - valor;
               }, 0);
-              const saldoAnterior = totalComissaoAnterior - totalRetiradasAnterior + totalAjustesAnterior;
+              let saldoAnterior = totalComissaoAnterior - totalRetiradasAnterior + totalAjustesAnterior;
+              const nomeKey = String(barbeiro.nome || '').toLowerCase();
+              if (overrides[nomeKey] !== undefined) {
+                saldoAnterior = overrides[nomeKey];
+              }
 
               // Criar transações do barbeiro com comissão
               const atendimentosTransacoesBarbeiro = atendimentosBarbeiro.map((a: any) => {
                 const valorAtendimento = parseFloat(a.valor || 0);
-                const comissaoAtendimento = valorAtendimento * porcentagemComissao;
+                const comissaoAtendimento = valorAtendimento * perc(a.data_atendimento);
                 return {
                   id: a.id,
                   type: "entrada",
@@ -411,7 +423,7 @@ const Caixa = () => {
                 saldo_inicial_mes: saldoAnterior,
                 quantidade_atendimentos: atendimentosBarbeiro.length,
                 transacoes: transacoesBarbeiro,
-                porcentagem_comissao: barbeiro.porcentagem_comissao,
+                porcentagem_comissao_exibir: (String(barbeiro.nome || '').toLowerCase() === 'alisson' && inicioMesAtual >= efetivo) ? 40 : barbeiro.porcentagem_comissao,
               };
             });
 
@@ -589,7 +601,7 @@ const Caixa = () => {
                     </CardHeader>
                     <CardContent className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Total Comissão ({stat.porcentagem_comissao}%):</span>
+                        <span className="text-sm text-muted-foreground">Total Comissão ({stat.porcentagem_comissao_exibir}%):</span>
                         <span className="font-semibold text-green-600">{formatCurrency(stat.total_comissao)}</span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -717,7 +729,7 @@ const Caixa = () => {
                   <CardContent>
                       <div className="grid gap-4">
                         <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                          <span className="font-semibold">Total Comissão ({statsBarbeiro.porcentagem_comissao}%):</span>
+                        <span className="font-semibold">Total Comissão ({statsBarbeiro.porcentagem_comissao_exibir}%):</span>
                           <span className="text-xl font-bold text-green-600">{formatCurrency(statsBarbeiro.total_comissao)}</span>
                         </div>
                         <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">

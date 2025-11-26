@@ -70,14 +70,14 @@ const Relatorios = () => {
         if (user?.role === "barber") {
           const { data: barbeiroData } = await supabase
             .from("barbeiros")
-            .select("id, porcentagem_comissao")
+            .select("id, porcentagem_comissao, nome")
             .eq("user_id", user.id)
             .single();
 
           if (barbeiroData) {
             const { data: atendimentos } = await supabase
               .from("atendimentos")
-              .select("valor, cliente_nome")
+              .select("valor, cliente_nome, data_atendimento")
               .eq("barbeiro_id", barbeiroData.id)
               .eq("pago", true)
               .gte("data_atendimento", start.toISOString())
@@ -85,7 +85,14 @@ const Relatorios = () => {
 
             const totalRevenue = atendimentos?.reduce((sum, a) => sum + Number(a.valor), 0) || 0;
             const uniqueClients = new Set(atendimentos?.map(a => a.cliente_nome)).size;
-            const commission = (totalRevenue * ((barbeiroData.porcentagem_comissao || 50) / 100));
+            const basePercent = Number(barbeiroData.porcentagem_comissao || 50);
+            const efetivo = new Date(2025, 10, 1);
+            const commission = atendimentos?.reduce((sum, a: any) => {
+              const dt = new Date(a.data_atendimento);
+              const nm = String(barbeiroData.nome || '').toLowerCase();
+              const pct = nm === 'alisson' && dt >= efetivo ? 40 : basePercent;
+              return sum + Number(a.valor) * (pct / 100);
+            }, 0) || 0;
 
             setStats({
               revenue: totalRevenue,
@@ -107,6 +114,7 @@ const Relatorios = () => {
               valor,
               cliente_nome,
               barbeiro_id,
+              data_atendimento,
               barbeiros (
                 nome,
                 porcentagem_comissao
@@ -135,13 +143,15 @@ const Relatorios = () => {
 
             existing.revenue += Number(a.valor);
             existing.appointments += 1;
+            const basePercent = Number(existing.percentage || 50);
+            const dt = new Date(a.data_atendimento);
+            const nm = String(existing.name || '').toLowerCase();
+            const pct = nm === 'alisson' && dt >= new Date(2025, 10, 1) ? 40 : basePercent;
+            existing.commission += Number(a.valor) * (pct / 100);
             barberMap.set(a.barbeiro_id, existing);
           });
 
-          const barberStats = Array.from(barberMap.values()).map(b => ({
-            ...b,
-            commission: (b.revenue * (b.percentage / 100)),
-          }));
+          const barberStats = Array.from(barberMap.values());
 
           const totalCommissions = barberStats.reduce((sum, b) => sum + b.commission, 0);
 
