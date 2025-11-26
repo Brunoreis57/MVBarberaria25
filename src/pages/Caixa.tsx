@@ -147,6 +147,11 @@ const Caixa = () => {
         supabase.from("retiradas").select("*").order("data_retirada", { ascending: false }),
         supabase.from("ajustes_caixa_barbeiro").select("*").order("data_ajuste", { ascending: false })
       ]).then(([{ data: retiradas }, { data: ajustes }]) => {
+          const agora = new Date();
+          const inicioMesAtual = startOfMonth(agora);
+          const fimMesAtual = endOfMonth(agora);
+          const inicioMesAnterior = startOfMonth(new Date(agora.getFullYear(), agora.getMonth() - 1, 1));
+          const fimMesAnterior = endOfMonth(new Date(agora.getFullYear(), agora.getMonth() - 1, 1));
           // Calcular totais por forma de pagamento dos atendimentos pagos
           const atendimentosPagos = atendimentos.filter((a: any) => a.pago);
           
@@ -175,8 +180,8 @@ const Caixa = () => {
             .filter((a: any) => a.forma_pagamento?.toLowerCase() === 'cartao-debito')
             .reduce((sum: number, a: any) => sum + parseFloat(a.valor || 0), 0) + totalVendasDebito;
           
-          const inicioMes = startOfMonth(new Date());
-          const fimMes = endOfMonth(new Date());
+          const inicioMes = inicioMesAtual;
+          const fimMes = fimMesAtual;
 
           const noMes = (d: string) => {
             const dt = new Date(d);
@@ -187,6 +192,15 @@ const Caixa = () => {
           const vendasMes = (vendas || []).filter((v: any) => noMes(v.data_venda));
           const retiradasMes = (retiradas || []).filter((r: any) => noMes(r.data_retirada));
           const ajustesMes = (ajustes || []).filter((a: any) => noMes(a.data_ajuste));
+
+          const noMesAnterior = (d: string) => {
+            const dt = new Date(d);
+            return dt >= inicioMesAnterior && dt <= fimMesAnterior;
+          };
+          const atendimentosMesAnterior = atendimentosPagos.filter((a: any) => noMesAnterior(a.data_atendimento));
+          const vendasMesAnterior = (vendas || []).filter((v: any) => noMesAnterior(v.data_venda));
+          const retiradasMesAnterior = (retiradas || []).filter((r: any) => noMesAnterior(r.data_retirada));
+          const ajustesMesAnterior = (ajustes || []).filter((a: any) => noMesAnterior(a.data_ajuste));
 
           const totalVendasCreditoMes = vendasMes
             .filter((v: any) => v.forma_pagamento?.toLowerCase() === 'credito')
@@ -293,6 +307,8 @@ const Caixa = () => {
             const statsPorBarbeiro = barbeiros.map((barbeiro: any) => {
               const atendimentosBarbeiro = atendimentosMes.filter((a: any) => a.barbeiro_id === barbeiro.id);
               const vendasBarbeiro = vendasMes.filter((v: any) => v.barbeiro_id === barbeiro.id);
+              const atendimentosBarbeiroAnterior = atendimentosMesAnterior.filter((a: any) => a.barbeiro_id === barbeiro.id);
+              const vendasBarbeiroAnterior = vendasMesAnterior.filter((v: any) => v.barbeiro_id === barbeiro.id);
               
               // Calcular comissão baseada na porcentagem do barbeiro
               const porcentagemComissao = parseFloat(barbeiro.porcentagem_comissao || 50) / 100;
@@ -319,6 +335,23 @@ const Caixa = () => {
               }, 0);
               
               const saldoBarbeiro = totalComissao - totalRetiradasBarbeiro + totalAjustes;
+
+              // Saldo do mês anterior (para carry over)
+              const porcentagemComissaoAnterior = parseFloat(barbeiro.porcentagem_comissao || 50) / 100;
+              const totalComissaoAtendimentosAnterior = atendimentosBarbeiroAnterior.reduce((sum: number, a: any) => {
+                const valorAtendimento = parseFloat(a.valor || 0);
+                return sum + (valorAtendimento * porcentagemComissaoAnterior);
+              }, 0);
+              const totalComissaoVendasAnterior = vendasBarbeiroAnterior.reduce((sum: number, v: any) => sum + parseFloat(v.valor_comissao || 0), 0);
+              const totalComissaoAnterior = totalComissaoAtendimentosAnterior + totalComissaoVendasAnterior;
+              const retiradasBarbeiroAnterior = retiradasMesAnterior.filter((r: any) => r.barbeiro_id === barbeiro.id);
+              const totalRetiradasAnterior = retiradasBarbeiroAnterior.reduce((sum: number, r: any) => sum + parseFloat(r.valor || 0), 0);
+              const ajustesBarbeiroAnterior = ajustesMesAnterior.filter((a: any) => a.barbeiro_id === barbeiro.id);
+              const totalAjustesAnterior = ajustesBarbeiroAnterior.reduce((sum: number, a: any) => {
+                const valor = parseFloat(a.valor || 0);
+                return a.tipo === 'credito' ? sum + valor : sum - valor;
+              }, 0);
+              const saldoAnterior = totalComissaoAnterior - totalRetiradasAnterior + totalAjustesAnterior;
 
               // Criar transações do barbeiro com comissão
               const atendimentosTransacoesBarbeiro = atendimentosBarbeiro.map((a: any) => {
@@ -375,6 +408,7 @@ const Caixa = () => {
                 total_retiradas: totalRetiradasBarbeiro,
                 total_ajustes: totalAjustes,
                 saldo: saldoBarbeiro,
+                saldo_inicial_mes: saldoAnterior,
                 quantidade_atendimentos: atendimentosBarbeiro.length,
                 transacoes: transacoesBarbeiro,
                 porcentagem_comissao: barbeiro.porcentagem_comissao,
@@ -382,6 +416,32 @@ const Caixa = () => {
             });
 
             setBarbeiroStats(statsPorBarbeiro);
+
+            // Inserir automaticamente saldo inicial do mês, se ainda não inserido
+            if (user?.role === 'admin') {
+              const ajustesAtual = (ajustesMes || []).filter((a: any) => a.descricao === 'Saldo inicial (mês anterior)');
+              const jaTemPara = new Set(ajustesAtual.map((a: any) => a.barbeiro_id));
+              const inserts = statsPorBarbeiro
+                .filter((s: any) => !jaTemPara.has(s.barbeiro_id) && s.saldo_inicial_mes !== 0)
+                .map((s: any) => ({
+                  barbeiro_id: s.barbeiro_id,
+                  tipo: s.saldo_inicial_mes >= 0 ? 'credito' : 'debito',
+                  valor: Math.abs(s.saldo_inicial_mes),
+                  descricao: 'Saldo inicial (mês anterior)',
+                  data_ajuste: inicioMesAtual.toISOString(),
+                }));
+              if (inserts.length > 0) {
+                supabase
+                  .from('ajustes_caixa_barbeiro')
+                  .insert(inserts)
+                  .then(
+                    () => {
+                      setReloadTrigger(prev => prev + 1);
+                    },
+                    (e) => console.error('Erro ao inserir saldo inicial:', e)
+                  );
+              }
+            }
           }
         }).catch(error => {
           console.error('Erro ao buscar dados do caixa:', error);
@@ -536,13 +596,19 @@ const Caixa = () => {
                         <span className="text-sm text-muted-foreground">Total Retiradas:</span>
                         <span className="font-semibold text-red-600">{formatCurrency(stat.total_retiradas)}</span>
                       </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Saldo Inicial (mês passado):</span>
+                        <span className={`font-semibold ${stat.saldo_inicial_mes >= 0 ? 'text-primary' : 'text-red-600'}`}>{formatCurrency(stat.saldo_inicial_mes)}</span>
+                      </div>
                       {stat.total_ajustes !== 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Ajustes:</span>
-                          <span className={`font-semibold ${stat.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatCurrency(stat.total_ajustes)}
-                          </span>
-                        </div>
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Ajustes:</span>
+                            <span className={`font-semibold ${stat.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatCurrency(stat.total_ajustes)}
+                            </span>
+                          </div>
+                        </>
                       )}
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-sm font-semibold">Saldo:</span>
@@ -649,21 +715,25 @@ const Caixa = () => {
                     <CardTitle className="text-center text-xl">{statsBarbeiro.barbeiro_nome}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-4">
-                      <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                        <span className="font-semibold">Total Comissão ({statsBarbeiro.porcentagem_comissao}%):</span>
-                        <span className="text-xl font-bold text-green-600">{formatCurrency(statsBarbeiro.total_comissao)}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                        <span className="font-semibold">Total Retiradas:</span>
-                        <span className="text-xl font-bold text-red-600">{formatCurrency(statsBarbeiro.total_retiradas)}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                        <span className="font-semibold">Ajustes:</span>
-                        <span className={`text-xl font-bold ${statsBarbeiro.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}> 
-                          {formatCurrency(statsBarbeiro.total_ajustes)}
-                        </span>
-                      </div>
+                      <div className="grid gap-4">
+                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                          <span className="font-semibold">Total Comissão ({statsBarbeiro.porcentagem_comissao}%):</span>
+                          <span className="text-xl font-bold text-green-600">{formatCurrency(statsBarbeiro.total_comissao)}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                          <span className="font-semibold">Total Retiradas:</span>
+                          <span className="text-xl font-bold text-red-600">{formatCurrency(statsBarbeiro.total_retiradas)}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                          <span className="font-semibold">Saldo Inicial (mês passado):</span>
+                          <span className={`text-xl font-bold ${statsBarbeiro.saldo_inicial_mes >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(statsBarbeiro.saldo_inicial_mes)}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                          <span className="font-semibold">Ajustes:</span>
+                          <span className={`text-xl font-bold ${statsBarbeiro.total_ajustes >= 0 ? 'text-green-600' : 'text-red-600'}`}> 
+                            {formatCurrency(statsBarbeiro.total_ajustes)}
+                          </span>
+                        </div>
                       <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg border-2 border-primary">
                         <span className="font-bold text-lg">Saldo:</span>
                         <span className={`text-2xl font-bold ${statsBarbeiro.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
