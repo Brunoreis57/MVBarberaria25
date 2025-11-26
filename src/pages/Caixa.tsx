@@ -332,18 +332,14 @@ const Caixa = () => {
               }, 0);
               
               const totalComissao = totalComissaoAtendimentos + totalComissaoVendas;
-              
               const retiradasBarbeiro = retiradasMes.filter((r: any) => r.barbeiro_id === barbeiro.id);
               const totalRetiradasBarbeiro = retiradasBarbeiro.reduce((sum: number, r: any) => sum + parseFloat(r.valor || 0), 0);
-              
               // Calcular ajustes de caixa (créditos - débitos)
               const ajustesBarbeiro = ajustesMes.filter((a: any) => a.barbeiro_id === barbeiro.id);
               const totalAjustes = ajustesBarbeiro.reduce((sum: number, a: any) => {
                 const valor = parseFloat(a.valor || 0);
                 return a.tipo === 'credito' ? sum + valor : sum - valor;
               }, 0);
-              
-              const saldoBarbeiro = totalComissao + saldoAnterior - totalRetiradasBarbeiro;
 
               // Saldo do mês anterior (para carry over)
               const totalComissaoAtendimentosAnterior = atendimentosBarbeiroAnterior.reduce((sum: number, a: any) => {
@@ -364,6 +360,8 @@ const Caixa = () => {
               if (overrides[nomeKey] !== undefined) {
                 saldoAnterior = overrides[nomeKey];
               }
+
+              const saldoBarbeiro = totalComissao + saldoAnterior - totalRetiradasBarbeiro;
 
               // Criar transações do barbeiro com comissão
               const atendimentosTransacoesBarbeiro = atendimentosBarbeiro.map((a: any) => {
